@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Package, DollarSign, AlertTriangle, TrendingUp } from 'lucide-react';
+import { Package, IndianRupee, AlertTriangle, TrendingUp } from 'lucide-react';
 import { api } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
 import type { Product, PurchaseOrder, SalesOrder } from '@/types';
@@ -61,7 +61,7 @@ export function DashboardPage() {
         <StatCard
           title="Stock Value"
           value={formatCurrency(stats?.stockValue ?? 0)}
-          icon={DollarSign}
+          icon={IndianRupee}
           color="bg-green-100 text-green-600"
         />
         <StatCard

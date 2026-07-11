@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
 datasource db {
@@ -7,8 +8,8 @@ datasource db {
   url      = env("POSTGRES_URL")
 }
 
-enum Role {
-  admin
+enum OrgRole {
+  owner
   staff
 }
 
@@ -41,12 +42,13 @@ enum StockReferenceType {
 model User {
   id           String   @id @default(cuid())
   email        String   @unique
-  passwordHash String   @map("password_hash")
   name         String
-  role         Role     @default(staff)
+  passwordHash String?  @map("password_hash")
+  avatarUrl    String?  @map("avatar_url")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
+  memberships    OrganizationMember[]
   purchaseOrders PurchaseOrder[]
   salesOrders    SalesOrder[]
   stockMovements StockMovement[]
@@ -54,84 +56,128 @@ model User {
   @@map("users")
 }
 
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  members        OrganizationMember[]
+  categories     Category[]
+  products       Product[]
+  suppliers      Supplier[]
+  customers      Customer[]
+  purchaseOrders PurchaseOrder[]
+  salesOrders    SalesOrder[]
+
+  @@map("organizations")
+}
+
+model OrganizationMember {
+  id             String   @id @default(cuid())
+  userId         String   @map("user_id")
+  organizationId String   @map("organization_id")
+  role           OrgRole  @default(staff)
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+  @@map("organization_members")
+}
+
 model Category {
-  id          String    @id @default(cuid())
-  name        String    @unique
-  description String?
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  name           String
+  description    String?
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
-  products Product[]
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  products     Product[]
 
+  @@unique([organizationId, name])
   @@map("categories")
 }
 
 model Product {
-  id           String   @id @default(cuid())
-  sku          String   @unique
-  name         String
-  description  String?
-  categoryId   String?  @map("category_id")
-  costPrice    Decimal  @default(0) @map("cost_price") @db.Decimal(10, 2)
-  sellPrice    Decimal  @default(0) @map("sell_price") @db.Decimal(10, 2)
-  currentStock Int      @default(0) @map("current_stock")
-  reorderLevel Int      @default(10) @map("reorder_level")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  sku            String
+  name           String
+  description    String?
+  categoryId     String?  @map("category_id")
+  costPrice      Decimal  @default(0) @map("cost_price") @db.Decimal(10, 2)
+  sellPrice      Decimal  @default(0) @map("sell_price") @db.Decimal(10, 2)
+  currentStock   Int      @default(0) @map("current_stock")
+  reorderLevel   Int      @default(10) @map("reorder_level")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
+  organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   category           Category?           @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   purchaseOrderItems PurchaseOrderItem[]
   salesOrderItems    SalesOrderItem[]
   stockMovements     StockMovement[]
 
+  @@unique([organizationId, sku])
   @@map("products")
 }
 
 model Supplier {
-  id        String   @id @default(cuid())
-  name      String
-  email     String?
-  phone     String?
-  address   String?
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  name           String
+  email          String?
+  phone          String?
+  address        String?
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   purchaseOrders PurchaseOrder[]
 
   @@map("suppliers")
 }
 
 model Customer {
-  id        String   @id @default(cuid())
-  name      String
-  email     String?
-  phone     String?
-  address   String?
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  name           String
+  email          String?
+  phone          String?
+  address        String?
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
-  salesOrders SalesOrder[]
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  salesOrders  SalesOrder[]
 
   @@map("customers")
 }
 
 model PurchaseOrder {
-  id           String              @id @default(cuid())
-  poNumber     String              @unique @map("po_number")
-  supplierId   String              @map("supplier_id")
-  status       PurchaseOrderStatus @default(draft)
-  orderDate    DateTime?           @map("order_date")
-  receivedDate DateTime?           @map("received_date")
-  total        Decimal             @default(0) @db.Decimal(10, 2)
-  notes        String?
-  createdById  String              @map("created_by_id")
-  createdAt    DateTime            @default(now()) @map("created_at")
-  updatedAt    DateTime            @updatedAt @map("updated_at")
+  id             String              @id @default(cuid())
+  organizationId String              @map("organization_id")
+  poNumber       String              @map("po_number")
+  supplierId     String              @map("supplier_id")
+  status         PurchaseOrderStatus @default(draft)
+  orderDate      DateTime?           @map("order_date")
+  receivedDate   DateTime?           @map("received_date")
+  total          Decimal             @default(0) @db.Decimal(10, 2)
+  notes          String?
+  createdById    String              @map("created_by_id")
+  createdAt      DateTime            @default(now()) @map("created_at")
+  updatedAt      DateTime            @updatedAt @map("updated_at")
 
-  supplier  Supplier            @relation(fields: [supplierId], references: [id])
-  createdBy User                @relation(fields: [createdById], references: [id])
-  items     PurchaseOrderItem[]
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  supplier     Supplier            @relation(fields: [supplierId], references: [id])
+  createdBy    User                @relation(fields: [createdById], references: [id])
+  items        PurchaseOrderItem[]
 
+  @@unique([organizationId, poNumber])
   @@map("purchase_orders")
 }
 
@@ -150,22 +196,25 @@ model PurchaseOrderItem {
 }
 
 model SalesOrder {
-  id          String           @id @default(cuid())
-  soNumber    String           @unique @map("so_number")
-  customerId  String           @map("customer_id")
-  status      SalesOrderStatus @default(draft)
-  orderDate   DateTime?        @map("order_date")
-  shippedDate DateTime?        @map("shipped_date")
-  total       Decimal          @default(0) @db.Decimal(10, 2)
-  notes       String?
-  createdById String           @map("created_by_id")
-  createdAt   DateTime         @default(now()) @map("created_at")
-  updatedAt   DateTime         @updatedAt @map("updated_at")
+  id             String           @id @default(cuid())
+  organizationId String           @map("organization_id")
+  soNumber       String           @map("so_number")
+  customerId     String           @map("customer_id")
+  status         SalesOrderStatus @default(draft)
+  orderDate      DateTime?        @map("order_date")
+  shippedDate    DateTime?        @map("shipped_date")
+  total          Decimal          @default(0) @db.Decimal(10, 2)
+  notes          String?
+  createdById    String           @map("created_by_id")
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
 
-  customer  Customer         @relation(fields: [customerId], references: [id])
-  createdBy User             @relation(fields: [createdById], references: [id])
-  items     SalesOrderItem[]
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer     Customer       @relation(fields: [customerId], references: [id])
+  createdBy    User           @relation(fields: [createdById], references: [id])
+  items        SalesOrderItem[]
 
+  @@unique([organizationId, soNumber])
   @@map("sales_orders")
 }
 
@@ -183,18 +232,31 @@ model SalesOrderItem {
 }
 
 model StockMovement {
-  id            String             @id @default(cuid())
-  productId     String             @map("product_id")
-  type          StockMovementType
-  quantity      Int
-  referenceType StockReferenceType @map("reference_type")
-  referenceId   String?            @map("reference_id")
-  notes         String?
-  createdById   String             @map("created_by_id")
-  createdAt     DateTime           @default(now()) @map("created_at")
+  id             String             @id @default(cuid())
+  organizationId String             @map("organization_id")
+  productId      String             @map("product_id")
+  type           StockMovementType
+  quantity       Int
+  referenceType  StockReferenceType @map("reference_type")
+  referenceId    String?            @map("reference_id")
+  notes          String?
+  createdById    String             @map("created_by_id")
+  createdAt      DateTime           @default(now()) @map("created_at")
 
   product   Product @relation(fields: [productId], references: [id])
   createdBy User    @relation(fields: [createdById], references: [id])
 
   @@map("stock_movements")
+}
+
+model OrgInvite {
+  id             String   @id @default(cuid())
+  organizationId String   @map("organization_id")
+  email          String
+  role           OrgRole  @default(staff)
+  invitedById    String   @map("invited_by_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@unique([organizationId, email])
+  @@map("org_invites")
 }

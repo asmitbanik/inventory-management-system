@@ -30,7 +30,7 @@ const navItems = [
 ];
 
 export function AppLayout() {
-  const { user, logout, isAdmin } = useAuth();
+  const { user, organization, logout, isOwner } = useAuth();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -39,17 +39,14 @@ export function AppLayout() {
     navigate('/login');
   };
 
-  const allNavItems = isAdmin
-    ? [...navItems, { to: '/users', label: 'Users', icon: UserCog }]
+  const allNavItems = isOwner
+    ? [...navItems, { to: '/team', label: 'Team', icon: UserCog }]
     : navItems;
 
   return (
     <div className="flex h-screen bg-gray-50">
       {sidebarOpen && (
-        <div
-          className="fixed inset-0 z-20 bg-black/50 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
+        <div className="fixed inset-0 z-20 bg-black/50 lg:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
       <aside
@@ -62,8 +59,8 @@ export function AppLayout() {
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-600">
             <Warehouse className="h-5 w-5 text-white" />
           </div>
-          <div>
-            <h1 className="font-bold text-gray-900">Inventory</h1>
+          <div className="min-w-0">
+            <h1 className="font-bold text-gray-900 truncate">{organization?.name || 'Inventory'}</h1>
             <p className="text-xs text-gray-500">Management System</p>
           </div>
           <button className="ml-auto lg:hidden" onClick={() => setSidebarOpen(false)}>
@@ -95,18 +92,18 @@ export function AppLayout() {
 
         <div className="border-t p-4">
           <div className="flex items-center gap-3 rounded-lg px-2 py-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-100 text-primary-700 text-sm font-semibold">
-              {user?.name?.charAt(0).toUpperCase()}
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-100 text-primary-700 text-sm font-semibold overflow-hidden">
+              {user?.avatarUrl ? (
+                <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" />
+              ) : (
+                user?.name?.charAt(0).toUpperCase()
+              )}
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium truncate">{user?.name}</p>
-              <p className="text-xs text-gray-500 capitalize">{user?.role}</p>
+              <p className="text-xs text-gray-500 capitalize">{organization?.role}</p>
             </div>
-            <button
-              onClick={handleLogout}
-              className="text-gray-400 hover:text-gray-600"
-              title="Logout"
-            >
+            <button onClick={handleLogout} className="text-gray-400 hover:text-gray-600" title="Logout">
               <LogOut className="h-4 w-4" />
             </button>
           </div>
@@ -118,7 +115,7 @@ export function AppLayout() {
           <button onClick={() => setSidebarOpen(true)}>
             <Menu className="h-5 w-5" />
           </button>
-          <h1 className="font-semibold">Inventory Management</h1>
+          <h1 className="font-semibold truncate">{organization?.name}</h1>
         </header>
         <main className="flex-1 overflow-y-auto p-6">
           <Outlet />

@@ -1,128 +1,234 @@
 import { Router } from 'express';
-import bcrypt from 'bcryptjs';
 import { z } from 'zod';
+import bcrypt from 'bcryptjs';
+import { OrgRole } from '@prisma/client';
 import { prisma } from '../lib/prisma.js';
-import { signToken, getCookieOptions, COOKIE_NAME } from '../lib/auth.js';
-import { authMiddleware, requireAdmin, type AuthRequest } from '../middleware/auth.js';
+import { setAuthCookie, clearAuthCookie } from '../lib/auth.js';
+import { acceptPendingInvites } from '../lib/invites.js';
+import { authMiddleware, orgMiddleware, requireOwner, type AuthRequest } from '../middleware/auth.js';
 import { asyncHandler, validateBody, getParam } from '../middleware/validate.js';
 
 const router = Router();
 
+const registerSchema = z.object({
+  email: z.string().email('Enter a valid email like you@gmail.com'),
+  password: z.string().min(6, 'Password must be at least 6 characters'),
+  name: z.string().min(1, 'Name is required'),
+});
+
 const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(1),
+  email: z.string().email('Enter a valid email like you@gmail.com'),
+  password: z.string().min(1, 'Password is required'),
 });
 
-const createUserSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(6),
-  name: z.string().min(1),
-  role: z.enum(['admin', 'staff']).default('staff'),
+const createOrgSchema = z.object({
+  name: z.string().min(1).max(100),
 });
 
-const updateUserSchema = z.object({
-  email: z.string().email().optional(),
-  password: z.string().min(6).optional(),
-  name: z.string().min(1).optional(),
-  role: z.enum(['admin', 'staff']).optional(),
+const inviteSchema = z.object({
+  email: z.string().email(),
+  role: z.enum(['owner', 'staff']).default('staff'),
 });
+
+function formatUser(user: {
+  id: string;
+  email: string;
+  name: string;
+  avatarUrl: string | null;
+  memberships: { organization: { id: string; name: string }; role: OrgRole }[];
+}) {
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    avatarUrl: user.avatarUrl,
+    organizations: user.memberships.map((m) => ({
+      id: m.organization.id,
+      name: m.organization.name,
+      role: m.role,
+    })),
+  };
+}
+
+async function getUserProfile(userId: string) {
+  return prisma.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      avatarUrl: true,
+      memberships: {
+        include: { organization: { select: { id: true, name: true } } },
+      },
+    },
+  });
+}
+
+router.post(
+  '/register',
+  validateBody(registerSchema),
+  asyncHandler(async (req, res) => {
+    const { email, password, name } = req.body;
+
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) return res.status(400).json({ error: 'Email already in use' });
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const user = await prisma.user.create({
+      data: { email, name, passwordHash },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        avatarUrl: true,
+        memberships: {
+          include: { organization: { select: { id: true, name: true } } },
+        },
+      },
+    });
+
+    await acceptPendingInvites(user.id, user.email);
+    const profile = await getUserProfile(user.id);
+    if (!profile) return res.status(500).json({ error: 'Failed to create account' });
+
+    setAuthCookie(res, { userId: user.id, email: user.email });
+    res.status(201).json({ user: formatUser(profile) });
+  })
+);
 
 router.post(
   '/login',
   validateBody(loginSchema),
   asyncHandler(async (req, res) => {
     const { email, password } = req.body;
+
     const user = await prisma.user.findUnique({ where: { email } });
-    if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+    if (!user?.passwordHash) {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
-    const token = signToken({ userId: user.id, email: user.email, role: user.role });
-    res.cookie(COOKIE_NAME, token, getCookieOptions());
-    res.json({
-      user: { id: user.id, email: user.email, name: user.name, role: user.role },
-    });
+
+    const valid = await bcrypt.compare(password, user.passwordHash);
+    if (!valid) return res.status(401).json({ error: 'Invalid email or password' });
+
+    await acceptPendingInvites(user.id, user.email);
+    const profile = await getUserProfile(user.id);
+    if (!profile) return res.status(404).json({ error: 'User not found' });
+
+    setAuthCookie(res, { userId: user.id, email: user.email });
+    res.json({ user: formatUser(profile) });
   })
 );
 
-router.post('/logout', (_req, res) => {
-  res.clearCookie(COOKIE_NAME, { path: '/' });
-  res.json({ success: true });
-});
+router.post(
+  '/logout',
+  asyncHandler(async (_req, res) => {
+    clearAuthCookie(res);
+    res.json({ success: true });
+  })
+);
 
 router.get(
   '/me',
   authMiddleware,
   asyncHandler(async (req: AuthRequest, res) => {
-    const user = await prisma.user.findUnique({
-      where: { id: req.user!.userId },
-      select: { id: true, email: true, name: true, role: true, createdAt: true },
-    });
+    const user = await getUserProfile(req.user!.userId);
     if (!user) return res.status(404).json({ error: 'User not found' });
-    res.json({ user });
-  })
-);
-
-router.get(
-  '/users',
-  authMiddleware,
-  requireAdmin,
-  asyncHandler(async (_req, res) => {
-    const users = await prisma.user.findMany({
-      select: { id: true, email: true, name: true, role: true, createdAt: true },
-      orderBy: { createdAt: 'desc' },
-    });
-    res.json({ users });
+    res.json({ user: formatUser(user) });
   })
 );
 
 router.post(
-  '/users',
+  '/organizations',
   authMiddleware,
-  requireAdmin,
-  validateBody(createUserSchema),
-  asyncHandler(async (req, res) => {
-    const { email, password, name, role } = req.body;
-    const existing = await prisma.user.findUnique({ where: { email } });
-    if (existing) return res.status(400).json({ error: 'Email already in use' });
-    const passwordHash = await bcrypt.hash(password, 10);
-    const user = await prisma.user.create({
-      data: { email, passwordHash, name, role },
-      select: { id: true, email: true, name: true, role: true, createdAt: true },
+  validateBody(createOrgSchema),
+  asyncHandler(async (req: AuthRequest, res) => {
+    const { name } = req.body;
+    const org = await prisma.organization.create({
+      data: {
+        name,
+        members: {
+          create: { userId: req.user!.userId, role: OrgRole.owner },
+        },
+      },
+      include: { members: true },
     });
-    res.status(201).json({ user });
+    res.status(201).json({
+      organization: { id: org.id, name: org.name, role: OrgRole.owner },
+    });
   })
 );
 
-router.put(
-  '/users/:id',
+router.get(
+  '/organizations/:id/members',
   authMiddleware,
-  requireAdmin,
-  validateBody(updateUserSchema),
-  asyncHandler(async (req, res) => {
-    const { email, password, name, role } = req.body;
-    const data: Record<string, unknown> = {};
-    if (email) data.email = email;
-    if (name) data.name = name;
-    if (role) data.role = role;
-    if (password) data.passwordHash = await bcrypt.hash(password, 10);
-    const user = await prisma.user.update({
-      where: { id: getParam(req, 'id') },
-      data,
-      select: { id: true, email: true, name: true, role: true, createdAt: true },
+  orgMiddleware,
+  asyncHandler(async (req: AuthRequest, res) => {
+    const members = await prisma.organizationMember.findMany({
+      where: { organizationId: req.org!.organizationId },
+      include: { user: { select: { id: true, email: true, name: true, avatarUrl: true } } },
+      orderBy: { createdAt: 'asc' },
     });
-    res.json({ user });
+    res.json({
+      members: members.map((m) => ({
+        id: m.id,
+        role: m.role,
+        user: m.user,
+        createdAt: m.createdAt,
+      })),
+    });
+  })
+);
+
+router.post(
+  '/organizations/:id/invites',
+  authMiddleware,
+  orgMiddleware,
+  requireOwner,
+  validateBody(inviteSchema),
+  asyncHandler(async (req: AuthRequest, res) => {
+    const { email, role } = req.body;
+    const orgId = req.org!.organizationId;
+
+    const existingUser = await prisma.user.findUnique({ where: { email } });
+    if (existingUser) {
+      const existingMember = await prisma.organizationMember.findUnique({
+        where: {
+          userId_organizationId: { userId: existingUser.id, organizationId: orgId },
+        },
+      });
+      if (existingMember) {
+        return res.status(400).json({ error: 'User is already a member' });
+      }
+      await prisma.organizationMember.create({
+        data: { userId: existingUser.id, organizationId: orgId, role },
+      });
+      return res.status(201).json({ message: 'User added to organization' });
+    }
+
+    await prisma.orgInvite.upsert({
+      where: { organizationId_email: { organizationId: orgId, email } },
+      update: { role },
+      create: { organizationId: orgId, email, role, invitedById: req.user!.userId },
+    });
+    res.status(201).json({ message: 'Invitation created. User will join when they sign in.' });
   })
 );
 
 router.delete(
-  '/users/:id',
+  '/organizations/:id/members/:memberId',
   authMiddleware,
-  requireAdmin,
+  orgMiddleware,
+  requireOwner,
   asyncHandler(async (req: AuthRequest, res) => {
-    if (getParam(req, 'id') === req.user!.userId) {
-      return res.status(400).json({ error: 'Cannot delete your own account' });
+    const member = await prisma.organizationMember.findFirst({
+      where: { id: getParam(req, 'memberId'), organizationId: req.org!.organizationId },
+    });
+    if (!member) return res.status(404).json({ error: 'Member not found' });
+    if (member.userId === req.user!.userId) {
+      return res.status(400).json({ error: 'Cannot remove yourself' });
     }
-    await prisma.user.delete({ where: { id: getParam(req, 'id') } });
+    await prisma.organizationMember.delete({ where: { id: member.id } });
     res.json({ success: true });
   })
 );

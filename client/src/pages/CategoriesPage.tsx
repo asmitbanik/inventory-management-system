@@ -12,7 +12,7 @@ import { PageLoader, EmptyState } from '@/components/ui/Loading';
 import type { Category } from '@/types';
 
 export function CategoriesPage() {
-  const { isAdmin } = useAuth();
+  const { isOwner } = useAuth();
   const { toast } = useToast();
   const qc = useQueryClient();
   const [modalOpen, setModalOpen] = useState(false);
@@ -52,7 +52,7 @@ export function CategoriesPage() {
           <h1 className="text-2xl font-bold">Categories</h1>
           <p className="text-gray-500">Organize your products</p>
         </div>
-        {isAdmin && (
+        {isOwner && (
           <Button onClick={() => { setEditing(null); setForm({ name: '', description: '' }); setModalOpen(true); }}>
             <Plus className="h-4 w-4" /> Add Category
           </Button>
@@ -71,7 +71,7 @@ export function CategoriesPage() {
                   <p className="mt-1 text-sm text-gray-500">{cat.description || 'No description'}</p>
                   <p className="mt-2 text-xs text-gray-400">{cat._count?.products ?? 0} products</p>
                 </div>
-                {isAdmin && (
+                {isOwner && (
                   <div className="flex gap-1">
                     <button onClick={() => { setEditing(cat); setForm({ name: cat.name, description: cat.description || '' }); setModalOpen(true); }} className="p-1.5 text-gray-400 hover:text-primary-600">
                       <Pencil className="h-4 w-4" />

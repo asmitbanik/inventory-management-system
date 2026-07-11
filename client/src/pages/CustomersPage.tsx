@@ -14,7 +14,7 @@ import type { Customer } from '@/types';
 const emptyForm = { name: '', email: '', phone: '', address: '' };
 
 export function CustomersPage() {
-  const { isAdmin } = useAuth();
+  const { isOwner } = useAuth();
   const { toast } = useToast();
   const qc = useQueryClient();
   const [modalOpen, setModalOpen] = useState(false);
@@ -50,7 +50,7 @@ export function CustomersPage() {
           <h1 className="text-2xl font-bold">Customers</h1>
           <p className="text-gray-500">Manage your customers</p>
         </div>
-        {isAdmin && (
+        {isOwner && (
           <Button onClick={() => { setEditing(null); setForm(emptyForm); setModalOpen(true); }}>
             <Plus className="h-4 w-4" /> Add Customer
           </Button>
@@ -64,7 +64,7 @@ export function CustomersPage() {
               <th className="px-4 py-3 text-left font-medium text-gray-600">Name</th>
               <th className="px-4 py-3 text-left font-medium text-gray-600 hidden md:table-cell">Email</th>
               <th className="px-4 py-3 text-left font-medium text-gray-600 hidden sm:table-cell">Phone</th>
-              {isAdmin && <th className="px-4 py-3 text-right font-medium text-gray-600">Actions</th>}
+              {isOwner && <th className="px-4 py-3 text-right font-medium text-gray-600">Actions</th>}
             </tr>
           </thead>
           <tbody className="divide-y">
@@ -75,7 +75,7 @@ export function CustomersPage() {
                 <td className="px-4 py-3 font-medium">{c.name}</td>
                 <td className="px-4 py-3 text-gray-500 hidden md:table-cell">{c.email || '—'}</td>
                 <td className="px-4 py-3 text-gray-500 hidden sm:table-cell">{c.phone || '—'}</td>
-                {isAdmin && (
+                {isOwner && (
                   <td className="px-4 py-3 text-right">
                     <button onClick={() => openEdit(c)} className="p-1.5 text-gray-400 hover:text-primary-600"><Pencil className="h-4 w-4" /></button>
                     <button onClick={() => { if (confirm('Delete?')) deleteMutation.mutate(c.id); }} className="p-1.5 text-gray-400 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>

@@ -3,8 +3,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { ToastProvider } from '@/contexts/ToastContext';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { ProtectedRoute, AdminRoute } from '@/components/layout/ProtectedRoute';
+import { ProtectedRoute, OwnerRoute } from '@/components/layout/ProtectedRoute';
 import { LoginPage } from '@/pages/LoginPage';
+import { SignupPage } from '@/pages/SignupPage';
+import { OnboardingPage } from '@/pages/OnboardingPage';
+import { SelectOrgPage } from '@/pages/SelectOrgPage';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { ProductsPage } from '@/pages/ProductsPage';
 import { CategoriesPage } from '@/pages/CategoriesPage';
@@ -15,12 +18,10 @@ import { PurchaseOrderDetailPage } from '@/pages/PurchaseOrderDetailPage';
 import { SalesOrdersPage } from '@/pages/SalesOrdersPage';
 import { SalesOrderDetailPage } from '@/pages/SalesOrderDetailPage';
 import { StockMovementsPage } from '@/pages/StockMovementsPage';
-import { UsersPage } from '@/pages/UsersPage';
+import { TeamPage } from '@/pages/TeamPage';
 
 const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: { retry: 1, staleTime: 30_000 },
-  },
+  defaultOptions: { queries: { retry: 1, staleTime: 30_000 } },
 });
 
 export default function App() {
@@ -31,6 +32,9 @@ export default function App() {
           <BrowserRouter>
             <Routes>
               <Route path="/login" element={<LoginPage />} />
+              <Route path="/signup" element={<SignupPage />} />
+              <Route path="/onboarding" element={<OnboardingPage />} />
+              <Route path="/select-org" element={<SelectOrgPage />} />
               <Route element={<ProtectedRoute />}>
                 <Route element={<AppLayout />}>
                   <Route path="/" element={<DashboardPage />} />
@@ -43,8 +47,8 @@ export default function App() {
                   <Route path="/sales-orders" element={<SalesOrdersPage />} />
                   <Route path="/sales-orders/:id" element={<SalesOrderDetailPage />} />
                   <Route path="/stock-movements" element={<StockMovementsPage />} />
-                  <Route element={<AdminRoute />}>
-                    <Route path="/users" element={<UsersPage />} />
+                  <Route element={<OwnerRoute />}>
+                    <Route path="/team" element={<TeamPage />} />
                   </Route>
                 </Route>
               </Route>

@@ -1,7 +1,14 @@
 {
-  "buildCommand": "npm run build --workspace=client",
+  "regions": ["bom1"],
+  "buildCommand": "npm run build",
   "installCommand": "npm install",
   "outputDirectory": "client/dist",
+  "functions": {
+    "api/**/*.ts": {
+      "maxDuration": 30,
+      "includeFiles": "node_modules/.prisma/**,server/dist/**,api/auth-handlers.cjs"
+    }
+  },
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api" },
     { "source": "/(.*)", "destination": "/index.html" }

@@ -1,61 +1,76 @@
 # Inventory Management System
 
-A full-stack inventory management web app for warehouse and retail operations. Track products, manage purchase and sales orders, monitor stock levels, and audit all stock movements.
+Live inventory management for warehouse and retail — multi-organization, Google sign-in, all data stored in your database.
 
 ## Tech Stack
 
-- **Frontend:** React 19, Vite, Tailwind CSS, TanStack Query, React Router
-- **Backend:** Node.js, Express, Prisma ORM
-- **Database:** PostgreSQL (Vercel Postgres / Neon)
-- **Deployment:** Vercel
+- **Frontend:** React, Vite, Tailwind CSS
+- **Backend:** Node.js, Express, Prisma
+- **Auth:** Supabase Auth (Google sign-in)
+- **Database:** Supabase Postgres
+- **Currency:** Indian Rupees (₹)
 
-## Features
+## How It Works
 
-- Multi-user authentication (admin + staff roles)
-- Product and category management with low-stock alerts
-- Supplier and customer management
-- Purchase orders with receive workflow (stock in)
-- Sales orders with ship workflow (stock out + validation)
-- Stock movement audit log with manual adjustments
-- Dashboard with key metrics and recent activity
+1. Sign up / sign in with **Google** (via Supabase)
+2. New users create their **organization** (business workspace)
+3. Add products, suppliers, customers, and orders — all saved to the database
+4. Owners can **invite staff** by email to join the organization
+5. Each organization's data is fully isolated
 
-## Getting Started
+## Setup
 
-### Prerequisites
+### 1. Create a Supabase Project
 
-- Node.js 20+
-- PostgreSQL database (local or Vercel Postgres)
+1. Go to [supabase.com](https://supabase.com) and create a free project
+2. Wait for the database to provision
 
-### Setup
+### 2. Enable Google Auth
 
-1. Clone and install dependencies:
+1. In Supabase dashboard → **Authentication** → **Providers**
+2. Enable **Google**
+3. Create OAuth credentials in [Google Cloud Console](https://console.cloud.google.com/apis/credentials):
+   - Application type: Web application
+   - Authorized redirect URI: `https://[your-project-ref].supabase.co/auth/v1/callback`
+4. Paste Client ID and Client Secret into Supabase Google provider settings
 
-```bash
-npm install
-```
+### 3. Get Your Keys
 
-2. Copy environment variables:
+From Supabase dashboard → **Project Settings** → **API**:
+
+| Key | Used in |
+|-----|---------|
+| Project URL | `SUPABASE_URL`, `VITE_SUPABASE_URL` |
+| `anon` `public` key | `VITE_SUPABASE_ANON_KEY` |
+| `service_role` key | `SUPABASE_SERVICE_ROLE_KEY` (server only, never expose) |
+
+From **Project Settings** → **Database** → **Connection string** (URI):
+
+| Key | Used in |
+|-----|---------|
+| Connection string (pooler) | `POSTGRES_URL` |
+
+### 4. Configure Environment
 
 ```bash
 cp .env.example .env
 ```
 
-3. Update `.env` with your database URL and a secure JWT secret:
+Fill in all values in `.env`. Also add to `client/.env` or root `.env`:
 
 ```
-POSTGRES_URL="postgresql://user:password@localhost:5432/inventory"
-JWT_SECRET="your-long-random-secret"
-CLIENT_URL="http://localhost:5173"
+VITE_SUPABASE_URL=https://xxx.supabase.co
+VITE_SUPABASE_ANON_KEY=eyJ...
 ```
 
-4. Run database migrations and seed:
+### 5. Install & Run Database
 
 ```bash
+npm install
 npm run db:push
-npm run db:seed
 ```
 
-5. Start development servers:
+### 6. Start Development
 
 ```bash
 npm run dev
@@ -64,57 +79,32 @@ npm run dev
 - Frontend: http://localhost:5173
 - API: http://localhost:3001
 
-### Demo Accounts
+### 7. Configure Redirect URL in Supabase
 
-| Role  | Email                 | Password  |
-|-------|-----------------------|-----------|
-| Admin | admin@inventory.com   | admin123  |
-| Staff | staff@inventory.com   | staff123  |
+In Supabase → **Authentication** → **URL Configuration**:
 
-## Deploy to Vercel
+- **Site URL:** `http://localhost:5173`
+- **Redirect URLs:** `http://localhost:5173/auth/callback`
 
-1. Push the repo to GitHub
-2. Import the project in [Vercel](https://vercel.com)
-3. Add **Vercel Postgres** from the Storage tab
-4. Set environment variables:
-   - `JWT_SECRET` — a long random string
-   - `CLIENT_URL` — your production URL (e.g. `https://your-app.vercel.app`)
-5. Deploy
+For production, add your Vercel URL too.
 
-After first deploy, run migrations against production:
+## Environment Variables
 
-```bash
-npx prisma db push
-npx tsx prisma/seed.ts
-```
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `POSTGRES_URL` | Yes | Supabase Postgres connection string |
+| `SUPABASE_URL` | Yes | Supabase project URL |
+| `SUPABASE_SERVICE_ROLE_KEY` | Yes | Server-side auth verification |
+| `VITE_SUPABASE_URL` | Yes | Same as SUPABASE_URL (for frontend) |
+| `VITE_SUPABASE_ANON_KEY` | Yes | Public anon key (for frontend) |
+| `CLIENT_URL` | Yes | `http://localhost:5173` or production URL |
 
-## Project Structure
+## Roles
 
-```
-inventory/
-├── client/          # React frontend (Vite)
-├── server/          # Express API
-├── api/             # Vercel serverless entry point
-├── prisma/          # Database schema and seed
-├── vercel.json      # Deployment config
-└── package.json     # Root workspace
-```
-
-## API Endpoints
-
-| Method | Endpoint                        | Description              |
-|--------|---------------------------------|--------------------------|
-| POST   | /api/auth/login                 | Login                    |
-| POST   | /api/auth/logout                | Logout                   |
-| GET    | /api/auth/me                    | Current user             |
-| GET    | /api/products                   | List products            |
-| GET    | /api/purchase-orders            | List purchase orders     |
-| POST   | /api/purchase-orders/:id/receive| Receive PO (stock in)    |
-| GET    | /api/sales-orders               | List sales orders        |
-| POST   | /api/sales-orders/:id/ship      | Ship SO (stock out)      |
-| GET    | /api/stock-movements            | Stock audit log          |
-| POST   | /api/stock-movements/adjust     | Manual stock adjustment  |
-| GET    | /api/dashboard/stats            | Dashboard metrics        |
+| Role | Permissions |
+|------|-------------|
+| **Owner** | Full access + team management + invite staff |
+| **Staff** | Manage inventory, orders, stock adjustments |
 
 ## License
 

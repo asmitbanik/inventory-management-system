@@ -1,4 +1,38 @@
+import type {
+  User,
+  Organization,
+  OrgMember,
+  Category,
+  Product,
+  Supplier,
+  Customer,
+  PurchaseOrder,
+  SalesOrder,
+  StockMovement,
+  DashboardStats,
+} from '@/types';
+
 const API_BASE = '/api';
+
+function formatErrorMessage(data: {
+  error?: string;
+  details?: { path: string; message: string }[];
+}) {
+  const detailMessage = Array.isArray(data.details)
+    ? data.details
+        .map((d) => {
+          const field = d.path === 'email' ? 'Email' : d.path === 'password' ? 'Password' : d.path === 'name' ? 'Name' : d.path;
+          if (d.path === 'email' && d.message === 'Invalid email') {
+            return `${field}: use a real address like you@gmail.com`;
+          }
+          return `${field}: ${d.message}`;
+        })
+        .join(', ')
+    : undefined;
+
+  if (data.error === 'Validation failed' && detailMessage) return detailMessage;
+  return data.error || detailMessage || 'Request failed';
+}
 
 class ApiError extends Error {
   constructor(
@@ -11,44 +45,84 @@ class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-  });
+let organizationId: string | null = null;
 
-  const data = await res.json().catch(() => ({}));
+export function setOrganizationId(id: string | null) {
+  organizationId = id;
+}
 
-  if (!res.ok) {
-    throw new ApiError(data.error || 'Request failed', res.status, data.details);
+async function request<T>(path: string, options: RequestInit = {}, needsOrg = true): Promise<T> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string>),
+  };
+
+  if (needsOrg) {
+    if (!organizationId) throw new ApiError('No organization selected', 400);
+    headers['X-Organization-Id'] = organizationId;
   }
 
-  return data as T;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30000);
+
+  try {
+    const res = await fetch(`${API_BASE}${path}`, {
+      ...options,
+      headers,
+      credentials: 'include',
+      signal: controller.signal,
+    });
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      throw new ApiError(formatErrorMessage(data), res.status, data.details);
+    }
+
+    return data as T;
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new ApiError('Request timed out. The server may be starting up — try again.', 504);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export const api = {
-  login: (email: string, password: string) =>
-    request<{ user: import('@/types').User }>('/auth/login', {
+  register: (data: { email: string; password: string; name: string }) =>
+    request<{ user: User }>('/auth/register', {
       method: 'POST',
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify(data),
+    }, false),
+
+  login: (data: { email: string; password: string }) =>
+    request<{ user: User }>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }, false),
+
+  logout: () => request<{ success: boolean }>('/auth/logout', { method: 'POST' }, false),
+
+  me: () => request<{ user: User | null }>('/auth/me', {}, false),
+
+  createOrganization: (name: string) =>
+    request<{ organization: Organization }>('/auth/organizations', {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    }, false),
+
+  getMembers: () => request<{ members: OrgMember[] }>(`/auth/organizations/${organizationId}/members`),
+  inviteMember: (email: string, role: string) =>
+    request(`/auth/organizations/${organizationId}/invites`, {
+      method: 'POST',
+      body: JSON.stringify({ email, role }),
     }),
+  removeMember: (memberId: string) =>
+    request(`/auth/organizations/${organizationId}/members/${memberId}`, { method: 'DELETE' }),
 
-  logout: () => request('/auth/logout', { method: 'POST' }),
-
-  me: () => request<{ user: import('@/types').User }>('/auth/me'),
-
-  getUsers: () => request<{ users: import('@/types').User[] }>('/auth/users'),
-  createUser: (data: { email: string; password: string; name: string; role: string }) =>
-    request('/auth/users', { method: 'POST', body: JSON.stringify(data) }),
-  updateUser: (id: string, data: Record<string, unknown>) =>
-    request(`/auth/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  deleteUser: (id: string) => request(`/auth/users/${id}`, { method: 'DELETE' }),
-
-  getCategories: () => request<{ categories: import('@/types').Category[] }>('/categories'),
+  getCategories: () => request<{ categories: Category[] }>('/categories'),
   createCategory: (data: { name: string; description?: string }) =>
     request('/categories', { method: 'POST', body: JSON.stringify(data) }),
   updateCategory: (id: string, data: { name?: string; description?: string }) =>
@@ -57,7 +131,7 @@ export const api = {
 
   getProducts: (params?: Record<string, string>) => {
     const qs = params ? '?' + new URLSearchParams(params).toString() : '';
-    return request<{ products: import('@/types').Product[] }>(`/products${qs}`);
+    return request<{ products: Product[] }>(`/products${qs}`);
   },
   createProduct: (data: Record<string, unknown>) =>
     request('/products', { method: 'POST', body: JSON.stringify(data) }),
@@ -65,14 +139,14 @@ export const api = {
     request(`/products/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteProduct: (id: string) => request(`/products/${id}`, { method: 'DELETE' }),
 
-  getSuppliers: () => request<{ suppliers: import('@/types').Supplier[] }>('/suppliers'),
+  getSuppliers: () => request<{ suppliers: Supplier[] }>('/suppliers'),
   createSupplier: (data: Record<string, unknown>) =>
     request('/suppliers', { method: 'POST', body: JSON.stringify(data) }),
   updateSupplier: (id: string, data: Record<string, unknown>) =>
     request(`/suppliers/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteSupplier: (id: string) => request(`/suppliers/${id}`, { method: 'DELETE' }),
 
-  getCustomers: () => request<{ customers: import('@/types').Customer[] }>('/customers'),
+  getCustomers: () => request<{ customers: Customer[] }>('/customers'),
   createCustomer: (data: Record<string, unknown>) =>
     request('/customers', { method: 'POST', body: JSON.stringify(data) }),
   updateCustomer: (id: string, data: Record<string, unknown>) =>
@@ -81,10 +155,10 @@ export const api = {
 
   getPurchaseOrders: (status?: string) => {
     const qs = status ? `?status=${status}` : '';
-    return request<{ purchaseOrders: import('@/types').PurchaseOrder[] }>(`/purchase-orders${qs}`);
+    return request<{ purchaseOrders: PurchaseOrder[] }>(`/purchase-orders${qs}`);
   },
   getPurchaseOrder: (id: string) =>
-    request<{ purchaseOrder: import('@/types').PurchaseOrder }>(`/purchase-orders/${id}`),
+    request<{ purchaseOrder: PurchaseOrder }>(`/purchase-orders/${id}`),
   createPurchaseOrder: (data: Record<string, unknown>) =>
     request('/purchase-orders', { method: 'POST', body: JSON.stringify(data) }),
   updatePurchaseOrder: (id: string, data: Record<string, unknown>) =>
@@ -94,10 +168,10 @@ export const api = {
 
   getSalesOrders: (status?: string) => {
     const qs = status ? `?status=${status}` : '';
-    return request<{ salesOrders: import('@/types').SalesOrder[] }>(`/sales-orders${qs}`);
+    return request<{ salesOrders: SalesOrder[] }>(`/sales-orders${qs}`);
   },
   getSalesOrder: (id: string) =>
-    request<{ salesOrder: import('@/types').SalesOrder }>(`/sales-orders/${id}`),
+    request<{ salesOrder: SalesOrder }>(`/sales-orders/${id}`),
   createSalesOrder: (data: Record<string, unknown>) =>
     request('/sales-orders', { method: 'POST', body: JSON.stringify(data) }),
   updateSalesOrder: (id: string, data: Record<string, unknown>) =>
@@ -106,13 +180,13 @@ export const api = {
 
   getStockMovements: (params?: Record<string, string>) => {
     const qs = params ? '?' + new URLSearchParams(params).toString() : '';
-    return request<{ movements: import('@/types').StockMovement[] }>(`/stock-movements${qs}`);
+    return request<{ movements: StockMovement[] }>(`/stock-movements${qs}`);
   },
   adjustStock: (data: { productId: string; quantity: number; notes: string }) =>
     request('/stock-movements/adjust', { method: 'POST', body: JSON.stringify(data) }),
 
   getDashboardStats: () =>
-    request<{ stats: import('@/types').DashboardStats }>('/dashboard/stats'),
+    request<{ stats: DashboardStats }>('/dashboard/stats'),
 };
 
 export { ApiError };

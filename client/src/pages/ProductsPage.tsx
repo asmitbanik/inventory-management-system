@@ -25,7 +25,7 @@ const emptyForm = {
 };
 
 export function ProductsPage() {
-  const { isAdmin } = useAuth();
+  const { isOwner } = useAuth();
   const { toast } = useToast();
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
@@ -51,8 +51,13 @@ export function ProductsPage() {
   });
 
   const saveMutation = useMutation({
-    mutationFn: (data: typeof form) =>
-      editing ? api.updateProduct(editing.id, data) : api.createProduct(data),
+    mutationFn: (data: typeof form) => {
+      const payload = {
+        ...data,
+        categoryId: data.categoryId || null,
+      };
+      return editing ? api.updateProduct(editing.id, payload) : api.createProduct(payload);
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['products'] });
       toast(editing ? 'Product updated' : 'Product created');
@@ -116,7 +121,7 @@ export function ProductsPage() {
           <h1 className="text-2xl font-bold">Products</h1>
           <p className="text-gray-500">Manage your product inventory</p>
         </div>
-        {isAdmin && (
+        {isOwner && (
           <Button onClick={openCreate}>
             <Plus className="h-4 w-4" /> Add Product
           </Button>
@@ -188,7 +193,7 @@ export function ProductsPage() {
                       <button onClick={() => openEdit(p)} className="p-1.5 text-gray-400 hover:text-primary-600 rounded">
                         <Pencil className="h-4 w-4" />
                       </button>
-                      {isAdmin && (
+                      {isOwner && (
                         <button
                           onClick={() => { if (confirm('Delete this product?')) deleteMutation.mutate(p.id); }}
                           className="p-1.5 text-gray-400 hover:text-red-600 rounded"

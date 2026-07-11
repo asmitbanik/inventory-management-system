@@ -1,9 +1,22 @@
+export interface Organization {
+  id: string;
+  name: string;
+  role: 'owner' | 'staff';
+}
+
 export interface User {
   id: string;
   email: string;
   name: string;
-  role: 'admin' | 'staff';
-  createdAt?: string;
+  avatarUrl?: string | null;
+  organizations: Organization[];
+}
+
+export interface OrgMember {
+  id: string;
+  role: 'owner' | 'staff';
+  user: { id: string; email: string; name: string; avatarUrl?: string | null };
+  createdAt: string;
 }
 
 export interface Category {
