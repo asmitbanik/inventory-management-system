@@ -1,6 +1,15 @@
-# Inventory Management System
+# Inventory Management System for Retail and Warehouse Operations
 
-Live inventory management for warehouse and retail — multi-organization, Google sign-in, all data stored in your database.
+Effortlessly manage your inventory, streamline operations, and boost productivity with our comprehensive Inventory Management System. Designed specifically for retail and warehouse operators, this system offers a user-friendly interface, robust features, and seamless integration with your existing infrastructure.
+
+## Key Features
+
+- **Multi-Organization Support**: Manage multiple businesses and teams from a single dashboard
+- **Google Sign-in**: Secure and convenient authentication for users
+- **Real-time Data Sync**: All data is stored in your Supabase Postgres database for easy access and management
+- **Customizable Roles**: Assign permissions and access levels to owners, staff, and other team members
+- **Inventory Management**: Track products, suppliers, customers, and orders with ease
+- **Stock Adjustments**: Update stock levels and manage inventory with precision
 
 ## Tech Stack
 
@@ -10,22 +19,14 @@ Live inventory management for warehouse and retail — multi-organization, Googl
 - **Database:** Supabase Postgres
 - **Currency:** Indian Rupees (₹)
 
-## How It Works
+## Getting Started
 
-1. Sign up / sign in with **Google** (via Supabase)
-2. New users create their **organization** (business workspace)
-3. Add products, suppliers, customers, and orders — all saved to the database
-4. Owners can **invite staff** by email to join the organization
-5. Each organization's data is fully isolated
-
-## Setup
-
-### 1. Create a Supabase Project
+### Step 1: Create a Supabase Project
 
 1. Go to [supabase.com](https://supabase.com) and create a free project
 2. Wait for the database to provision
 
-### 2. Enable Google Auth
+### Step 2: Enable Google Auth
 
 1. In Supabase dashboard → **Authentication** → **Providers**
 2. Enable **Google**
@@ -34,7 +35,7 @@ Live inventory management for warehouse and retail — multi-organization, Googl
    - Authorized redirect URI: `https://[your-project-ref].supabase.co/auth/v1/callback`
 4. Paste Client ID and Client Secret into Supabase Google provider settings
 
-### 3. Get Your Keys
+### Step 3: Get Your Keys
 
 From Supabase dashboard → **Project Settings** → **API**:
 
@@ -50,7 +51,7 @@ From **Project Settings** → **Database** → **Connection string** (URI):
 |-----|---------|
 | Connection string (pooler) | `POSTGRES_URL` |
 
-### 4. Configure Environment
+### Step 4: Configure Environment
 
 ```bash
 cp .env.example .env
@@ -63,14 +64,14 @@ VITE_SUPABASE_URL=https://xxx.supabase.co
 VITE_SUPABASE_ANON_KEY=eyJ...
 ```
 
-### 5. Install & Run Database
+### Step 5: Install & Run Database
 
 ```bash
 npm install
 npm run db:push
 ```
 
-### 6. Start Development
+### Step 6: Start Development
 
 ```bash
 npm run dev
@@ -79,7 +80,7 @@ npm run dev
 - Frontend: http://localhost:5173
 - API: http://localhost:3001
 
-### 7. Configure Redirect URL in Supabase
+### Step 7: Configure Redirect URL in Supabase
 
 In Supabase → **Authentication** → **URL Configuration**:
 
